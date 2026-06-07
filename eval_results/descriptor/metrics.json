@@ -1,0 +1,40 @@
+{
+  "num_train": 2048,
+  "num_generated": 2048,
+  "num_assets": 32,
+  "real_mean_l2": 0.036509886384010315,
+  "gen_mean_l2": 0.19272512197494507,
+  "mean_diff_l2": 0.20532836019992828,
+  "real_cov_fro": 2.004783034659087,
+  "gen_cov_fro": 1.8664116326012614,
+  "cov_diff_fro": 0.3258530449137667,
+  "cov_ratio_gen_over_real": 0.9309793630205198,
+  "cov_diff_relative": 0.1625378104664468,
+  "std_ratio_gen_over_real": 0.9498876929283142,
+  "data_type": "descriptor",
+  "num_factors": 4,
+  "subspace_error_training": 0.0647581816833105,
+  "subspace_error_generated": 0.18327080956002373,
+  "subspace_error_ratio": 2.8300796099600234,
+  "eigenvalue_error_training": 0.052792166220225756,
+  "eigenvalue_error_generated": 0.1374996718599439,
+  "eigenvalue_error_ratio": 2.6045468808071943,
+  "ground_truth_eigenvalues": [
+    1.4156376123428345,
+    1.1947686672210693,
+    0.7480401396751404,
+    0.5387607216835022
+  ],
+  "training_top_eigenvalues": [
+    1.3777295103125347,
+    1.1695696864380356,
+    0.6600851113141959,
+    0.5633922318043119
+  ],
+  "generated_top_eigenvalues": [
+    1.3221748933808024,
+    1.0993283748586162,
+    0.5701432864472223,
+    0.44917668102055863
+  ]
+}

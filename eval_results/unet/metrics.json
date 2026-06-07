@@ -1,0 +1,40 @@
+{
+  "num_train": 512,
+  "num_generated": 8192,
+  "num_assets": 64,
+  "real_mean_l2": 0.69988614320755,
+  "gen_mean_l2": 2.7617506980895996,
+  "mean_diff_l2": 2.277726411819458,
+  "real_cov_fro": 120.68142701008456,
+  "gen_cov_fro": 91.04874802991735,
+  "cov_diff_fro": 42.55896865451569,
+  "cov_ratio_gen_over_real": 0.75445534814822,
+  "cov_diff_relative": 0.3526554972784612,
+  "std_ratio_gen_over_real": 0.9793837070465088,
+  "data_type": "simulation",
+  "num_factors": 4,
+  "subspace_error_training": 1.3927319716042468,
+  "subspace_error_generated": 1.2319879298371206,
+  "subspace_error_ratio": 0.8845836492272308,
+  "eigenvalue_error_training": 0.05482013267432728,
+  "eigenvalue_error_generated": 0.2417203879798475,
+  "eigenvalue_error_ratio": 4.409336063008967,
+  "ground_truth_eigenvalues": [
+    80.24733389102114,
+    68.25743583482001,
+    46.062314140504654,
+    31.713384861359035
+  ],
+  "training_top_eigenvalues": [
+    86.29232874696612,
+    65.06808434415565,
+    44.91959742611071,
+    29.416777832973732
+  ],
+  "generated_top_eigenvalues": [
+    66.42627979368318,
+    46.45117919481599,
+    29.81495931553763,
+    27.829937316070318
+  ]
+}

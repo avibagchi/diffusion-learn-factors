@@ -6,7 +6,6 @@ from functools import partial
 from collections import namedtuple
 from multiprocessing import cpu_count
 from scipy.stats import ortho_group
-from torch.utils.tensorboard import SummaryWriter
 import os
 
 import torch
@@ -1204,9 +1203,6 @@ class Trainer:
 
         self.save_best_and_latest_only = save_best_and_latest_only
 
-        # TensorBoard logger
-        self.logger = SummaryWriter(log_dir=self.checkpoint_folder)
-
     def train(self):
         device = self.device
         self.model.to(device)
@@ -1252,16 +1248,12 @@ class Trainer:
                 # Log metrics at the end of the epoch
                 avg_train_loss = total_loss / num_batches
 
-                self.logger.add_scalar('Train/Average Loss', avg_train_loss, epoch)
-                self.logger.flush()
-
                 self.accelerator.print(f"Epoch {epoch + 1}/{self.train_epochs} completed with avg loss {avg_train_loss:.4f}")
 
                 # Save model and generate samples at the end of each epoch
                 if self.accelerator.is_main_process and (epoch + 1) % self.save_and_sample_every == 0:
                     self.save_and_sample(epoch)  # Save samples and checkpoint at each epoch
 
-        self.logger.close()
         self.accelerator.print("Training complete")
 
     def save_checkpoint(self, epoch):

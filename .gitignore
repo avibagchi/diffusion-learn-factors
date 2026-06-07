@@ -172,3 +172,29 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# --- Diffusion Factor Model project artifacts ---
+
+# Generated / training outputs
+model_results/
+samples/
+results/
+results_descriptor/
+
+# Local datasets (regenerate via scripts/generate_descriptor_data.py)
+data/
+
+# Optional data directories from README
+simulation_experiment_data/
+empirical_analysis_data/
+
+# Model checkpoints and generated sample arrays
+*.pt
+*.pth
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
