@@ -53,6 +53,62 @@ def generate_samples(
     return np.concatenate(chunks, axis=0)
 
 
+def _orthonormal_basis(M: np.ndarray, tol: float = 1e-9) -> np.ndarray:
+    """Orthonormal basis (m x r) of the column space of M (m x k), via SVD."""
+    U, s, _ = np.linalg.svd(M, full_matrices=False)
+    rank = int((s > tol * max(s[0], 1.0)).sum())
+    return U[:, :rank]
+
+
+def subspace_recovery_metrics(A: np.ndarray, T: np.ndarray) -> dict:
+    """
+    Rotation/scaling-invariant comparison of the learned descriptor-to-factor map
+    A against the ground-truth T (Section 3.2 identifiability question).
+
+    The identifiable object is the column space (loading space), so A and T are
+    only defined up to a k x k change of basis. We therefore compare span(A) and
+    span(T) via principal angles, the projector distance, and an orthogonal
+    Procrustes alignment of their orthonormal bases. Singular-value comparison
+    alone is blind to the column space and is kept only for reference.
+    """
+    Qa = _orthonormal_basis(A)
+    Qt = _orthonormal_basis(T)
+    ra, rt = Qa.shape[1], Qt.shape[1]
+    k = min(ra, rt)
+
+    # Principal angles: singular values of Qa^T Qt are the cosines.
+    cos_angles = np.linalg.svd(Qa.T @ Qt, compute_uv=False)
+    cos_angles = np.clip(cos_angles[:k], -1.0, 1.0)
+    angles = np.arccos(cos_angles)  # radians, ascending in cos -> descending order
+
+    # Projector (Frobenius) distance between the two subspaces.
+    # For equal-dim subspaces, ||P_A - P_T||_F = sqrt(2) * ||sin(theta)||_2.
+    Pa = Qa @ Qa.T
+    Pt = Qt @ Qt.T
+    projector_error = float(np.linalg.norm(Pa - Pt))
+    # Max possible projector distance between two k-dim subspaces is sqrt(2k).
+    projector_error_normalized = projector_error / float(np.sqrt(2.0 * k)) if k else 0.0
+
+    # Orthogonal Procrustes: best rotation aligning the bases; residual in [0, 1].
+    W, _, Zt = np.linalg.svd(Qa.T @ Qt, full_matrices=False)
+    R = W @ Zt
+    procrustes_residual = float(np.linalg.norm(Qa @ R - Qt) / max(np.linalg.norm(Qt), 1e-12))
+
+    return {
+        "A_rank": ra,
+        "T_rank": rt,
+        "principal_angles_deg": np.degrees(angles).tolist(),
+        "mean_principal_angle_deg": float(np.degrees(angles).mean()),
+        "max_principal_angle_deg": float(np.degrees(angles).max()),
+        "grassmann_distance": float(np.linalg.norm(angles)),
+        "subspace_projector_error": projector_error,
+        "subspace_projector_error_normalized": projector_error_normalized,
+        "procrustes_residual": procrustes_residual,
+        "A_singular_values": np.linalg.svd(A, compute_uv=False).tolist(),
+        "T_singular_values": np.linalg.svd(T, compute_uv=False).tolist(),
+    }
+
+
 def evaluate_samples(
     model: DescriptorFactorDiffusion,
     data: dict,
@@ -75,13 +131,24 @@ def evaluate_samples(
 
     A = model.score_net.A.detach().cpu().numpy()
     T = data["T"]
-    # Compare subspaces (A and T may differ by rotation)
-    _, s_a, _ = np.linalg.svd(A, full_matrices=False)
-    _, s_t, _ = np.linalg.svd(T, full_matrices=False)
-    metrics["A_singular_values"] = s_a.tolist()
-    metrics["T_singular_values"] = s_t.tolist()
+    # Identifiability: compare span(A) vs span(T) up to rotation/scaling.
+    metrics["subspace_recovery"] = subspace_recovery_metrics(A, T)
 
     return metrics, generated
+
+
+def print_metrics(metrics: dict, indent: int = 2) -> None:
+    pad = " " * indent
+    for k, v in metrics.items():
+        if isinstance(v, dict):
+            print(f"{pad}{k}:")
+            print_metrics(v, indent + 2)
+        elif isinstance(v, list):
+            print(f"{pad}{k}: {v}")
+        elif isinstance(v, float):
+            print(f"{pad}{k}: {v:.6f}")
+        else:
+            print(f"{pad}{k}: {v}")
 
 
 def load_model_from_checkpoint(
@@ -247,11 +314,7 @@ def main():
             gen_batch_size=args.gen_batch_size,
         )
         print("Sample metrics:")
-        for k, v in metrics.items():
-            if k.endswith("singular_values"):
-                print(f"  {k}: {v}")
-            else:
-                print(f"  {k}: {v:.6f}")
+        print_metrics(metrics)
         sample_dir = save_generated_samples(generated, data, Path(args.output_dir), metrics)
         print(f"Saved {generated.shape[0]} samples to {sample_dir}")
         return
@@ -302,11 +365,7 @@ def main():
         gen_batch_size=args.gen_batch_size,
     )
     print("Post-training metrics:")
-    for k, v in metrics.items():
-        if k.endswith("singular_values"):
-            print(f"  {k}: {v}")
-        else:
-            print(f"  {k}: {v:.6f}")
+    print_metrics(metrics)
 
     sample_dir = save_generated_samples(generated, data, Path(args.output_dir), metrics)
     print(f"Saved {generated.shape[0]} samples to {sample_dir}")
