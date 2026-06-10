@@ -1222,11 +1222,11 @@ class Trainer:
             
             with tqdm(total=len(self.dataloader), desc=f"Epoch {epoch+1}/{self.train_epochs}", disable=not self.accelerator.is_main_process) as pbar:
                 for batch_idx, data in enumerate(self.dataloader):
-                    data = data[0].to(device)
+                    data = [x.to(device) for x in data]
 
                     # Forward pass with gradient accumulation
                     with self.accelerator.autocast():
-                        batch_loss = self.model(data) / self.gradient_accumulate_every
+                        batch_loss = self.model(*data) / self.gradient_accumulate_every
                         total_loss += batch_loss.item()
 
                     self.accelerator.backward(batch_loss)
