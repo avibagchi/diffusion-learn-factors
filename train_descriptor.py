@@ -259,19 +259,19 @@ def main():
     parser.add_argument(
         "--normalize_returns",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help="Standardize returns (per-asset mean, global std) before diffusion",
     )
     parser.add_argument(
         "--mean_loss_weight",
         type=float,
-        default=0.05,
+        default=0,
         help="Weight for auxiliary zero-mean x0 loss (0 disables)",
     )
     parser.add_argument(
         "--clip_denoised",
         type=float,
-        default=3.0,
+        default=0,
         help="Clamp predicted x0 to [-clip, clip] in normalized space (0 disables)",
     )
     parser.add_argument(

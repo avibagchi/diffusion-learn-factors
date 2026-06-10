@@ -81,10 +81,10 @@ class DescriptorSubspaceNetwork(nn.Module):
         period_embed_dim: int = 16,
     ):
         super().__init__()
-        self.period_embed = nn.Embedding(max_periods, period_embed_dim)
+        # self.period_embed = nn.Embedding(max_periods, period_embed_dim)
         self.max_periods = max_periods
         self.time_embed = SinusoidalTimeEmbed(hidden_size)
-        in_dim = num_descriptors + hidden_size + period_embed_dim
+        in_dim = num_descriptors + hidden_size # + period_embed_dim
         self.fc1 = nn.Linear(in_dim, hidden_size)
         self.norm1 = RMSNorm1d(hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
@@ -93,8 +93,11 @@ class DescriptorSubspaceNetwork(nn.Module):
 
     def forward(self, z: torch.Tensor, t: torch.Tensor, period_idx: torch.Tensor) -> torch.Tensor:
         t_emb = self.time_embed(t)
-        p_emb = self.period_embed(period_idx.clamp(min=0, max=self.max_periods - 1))
-        x = torch.cat([z, t_emb, p_emb], dim=-1)
+        # p_emb = self.period_embed(period_idx.clamp(min=0, max=self.max_periods - 1))
+        
+        p_emb = period_idx.clamp(min=0, max=self.max_periods - 1)
+        # x = torch.cat([z, t_emb, p_emb], dim=-1)
+        x = torch.cat([z, t_emb], dim=-1)
         x = F.silu(self.fc1(x))
         x = F.silu(self.fc2(x))
         return self.fc3(x)
@@ -425,7 +428,8 @@ def generate_descriptor_dataset(
 
     rng = np.random.default_rng(seed)
 
-    T, _ = np.linalg.qr(rng.standard_normal((num_descriptors, num_descriptors)))
+    # T, _ = np.linalg.qr(rng.standard_normal((num_descriptors, num_descriptors)))
+    T = rng.standard_normal((num_descriptors, num_descriptors))
     T = (T[:, :num_factors] * factor_scale).astype(np.float32)
 
     U_base = _normalize_descriptor_columns(rng.standard_normal((num_assets, num_descriptors)))
