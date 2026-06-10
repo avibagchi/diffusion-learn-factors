@@ -28,6 +28,25 @@ def thin_qr(U: torch.Tensor) -> torch.Tensor:
     return Q
 
 
+class RMSNorm1d(nn.Module):
+    """RMSNorm for vector features (batch, dim)."""
+
+    def __init__(self, dim: int):
+        super().__init__()
+        self.scale = dim**0.5
+        self.g = nn.Parameter(torch.ones(dim))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return F.normalize(x, dim=-1) * self.g * self.scale
+
+
+def init_descriptor_A(num_descriptors: int, num_factors: int) -> torch.Tensor:
+    """Orthonormal columns, unit scale — matches typical QR ground-truth T."""
+    A = torch.empty(num_descriptors, num_factors)
+    nn.init.orthogonal_(A)
+    return A
+
+
 class SinusoidalTimeEmbed(nn.Module):
     def __init__(self, dim: int):
         super().__init__()
@@ -66,19 +85,19 @@ class DescriptorSubspaceNetwork(nn.Module):
         self.max_periods = max_periods
         self.time_embed = SinusoidalTimeEmbed(hidden_size)
         in_dim = num_descriptors + hidden_size + period_embed_dim
-        self.mlp = nn.Sequential(
-            nn.Linear(in_dim, hidden_size),
-            nn.SiLU(),
-            nn.Linear(hidden_size, hidden_size),
-            nn.SiLU(),
-            nn.Linear(hidden_size, num_factors),
-        )
+        self.fc1 = nn.Linear(in_dim, hidden_size)
+        self.norm1 = RMSNorm1d(hidden_size)
+        self.fc2 = nn.Linear(hidden_size, hidden_size)
+        self.norm2 = RMSNorm1d(hidden_size)
+        self.fc3 = nn.Linear(hidden_size, num_factors)
 
     def forward(self, z: torch.Tensor, t: torch.Tensor, period_idx: torch.Tensor) -> torch.Tensor:
         t_emb = self.time_embed(t)
         p_emb = self.period_embed(period_idx.clamp(min=0, max=self.max_periods - 1))
         x = torch.cat([z, t_emb, p_emb], dim=-1)
-        return self.mlp(x)
+        x = F.silu(self.fc1(x))
+        x = F.silu(self.fc2(x))
+        return self.fc3(x)
 
 
 class DescriptorScoreNetwork(nn.Module):
@@ -99,7 +118,7 @@ class DescriptorScoreNetwork(nn.Module):
         self.num_descriptors = num_descriptors
         self.num_factors = num_factors
 
-        self.A = nn.Parameter(torch.randn(num_descriptors, num_factors) * 0.02)
+        self.A = nn.Parameter(init_descriptor_A(num_descriptors, num_factors))
         self.subspace_net = DescriptorSubspaceNetwork(
             num_descriptors,
             num_factors,
@@ -157,6 +176,8 @@ class DescriptorFactorDiffusion(nn.Module):
         beta_schedule: str = "cosine",
         hidden_size: int = 128,
         max_periods: int = 4096,
+        clip_denoised: float = 3.0,
+        mean_loss_weight: float = 0.0,
     ):
         super().__init__()
         self.num_assets = num_assets
@@ -165,6 +186,11 @@ class DescriptorFactorDiffusion(nn.Module):
         self.num_timesteps = timesteps
         self.hidden_size = hidden_size
         self.max_periods = max_periods
+        self.clip_denoised = clip_denoised
+        self.mean_loss_weight = mean_loss_weight
+
+        self.register_buffer("return_mean", torch.zeros(num_assets))
+        self.register_buffer("return_scale", torch.tensor(1.0))
 
         self.score_net = DescriptorScoreNetwork(
             num_assets,
@@ -174,6 +200,30 @@ class DescriptorFactorDiffusion(nn.Module):
             max_periods=max_periods,
         )
         self._setup_schedule(timesteps, beta_schedule)
+
+    def set_return_normalization(
+        self,
+        mean: np.ndarray | torch.Tensor,
+        scale: float,
+    ) -> None:
+        mean_t = torch.as_tensor(mean, dtype=torch.float32).reshape(-1)
+        if mean_t.shape[0] != self.num_assets:
+            raise ValueError(
+                f"return mean length {mean_t.shape[0]} != num_assets {self.num_assets}"
+            )
+        self.return_mean.copy_(mean_t)
+        self.return_scale.fill_(max(float(scale), 1e-6))
+
+    def normalize_returns(self, x: torch.Tensor) -> torch.Tensor:
+        return (x - self.return_mean) / self.return_scale
+
+    def denormalize_returns(self, x: torch.Tensor) -> torch.Tensor:
+        return x * self.return_scale + self.return_mean
+
+    def _clip_x_start(self, x_start: torch.Tensor) -> torch.Tensor:
+        if self.clip_denoised and self.clip_denoised > 0:
+            return x_start.clamp(-self.clip_denoised, self.clip_denoised)
+        return x_start
 
     def _setup_schedule(self, timesteps: int, beta_schedule: str):
         if beta_schedule == "linear":
@@ -239,7 +289,12 @@ class DescriptorFactorDiffusion(nn.Module):
         h = self.h_t[t]
         alpha = self.alpha_t[t]
         pred_noise = self.score_net(x_t, t, U, period_idx, h, alpha)
-        return F.mse_loss(pred_noise, noise)
+        loss = F.mse_loss(pred_noise, noise)
+        if self.mean_loss_weight > 0:
+            x0_pred = self.predict_start_from_noise(x_t, t, pred_noise)
+            x0_pred = self._clip_x_start(x0_pred)
+            loss = loss + self.mean_loss_weight * x0_pred.pow(2).mean()
+        return loss
 
     def forward(
         self,
@@ -247,6 +302,7 @@ class DescriptorFactorDiffusion(nn.Module):
         U: torch.Tensor,
         period_idx: torch.Tensor,
     ) -> torch.Tensor:
+        x0 = self.normalize_returns(x0)
         b = x0.shape[0]
         t = torch.randint(0, self.num_timesteps, (b,), device=x0.device, dtype=torch.long)
         return self.p_losses(x0, t, U, period_idx)
@@ -271,14 +327,17 @@ class DescriptorFactorDiffusion(nn.Module):
         posterior_log_variance = self._extract(self.posterior_log_variance_clipped, t, x_t.shape)
         return posterior_mean, posterior_variance, posterior_log_variance
 
-    def p_sample(self, x, t, U, period_idx):
+    def p_sample(self, x, t, U, period_idx, deterministic: bool = False):
         batched_times = torch.full((x.shape[0],), t, device=x.device, dtype=torch.long)
         h = self.h_t[batched_times]
         alpha = self.alpha_t[batched_times]
         pred_noise = self.score_net(x, batched_times, U, period_idx, h, alpha)
         x_start = self.predict_start_from_noise(x, batched_times, pred_noise)
+        x_start = self._clip_x_start(x_start)
         model_mean, _, model_log_variance = self.q_posterior(x_start, x, batched_times)
-        noise = torch.randn_like(x) if t > 0 else torch.zeros_like(x)
+        if deterministic or t == 0:
+            return model_mean
+        noise = torch.randn_like(x)
         return model_mean + (0.5 * model_log_variance).exp() * noise
 
     @torch.no_grad()
@@ -287,6 +346,7 @@ class DescriptorFactorDiffusion(nn.Module):
         U: torch.Tensor,
         period_idx: torch.Tensor,
         num_steps: Optional[int] = None,
+        deterministic: bool = False,
     ) -> torch.Tensor:
         """Reverse diffusion conditioned on descriptor matrices U."""
         device = U.device
@@ -300,9 +360,9 @@ class DescriptorFactorDiffusion(nn.Module):
             times = torch.linspace(self.num_timesteps - 1, 0, num_steps, device=device).long().tolist()
 
         for t in times:
-            x = self.p_sample(x, int(t), U, period_idx)
+            x = self.p_sample(x, int(t), U, period_idx, deterministic=deterministic)
 
-        return x
+        return self.denormalize_returns(x)
 
 
 class DescriptorReturnDataset(Dataset):
@@ -454,6 +514,13 @@ def load_descriptor_dataset(data_dir: str | Path) -> dict:
     return result
 
 
+def compute_return_norm_stats(returns: np.ndarray) -> tuple[np.ndarray, float]:
+    """Per-asset mean and global std for return standardization."""
+    mean = returns.mean(axis=0).astype(np.float32)
+    scale = float(max(returns.std(), 1e-6))
+    return mean, scale
+
+
 class DescriptorTrainer:
     """Lightweight trainer for CPU or single-GPU runs."""
 
@@ -529,6 +596,10 @@ class DescriptorTrainer:
                 "num_timesteps": self.model.num_timesteps,
                 "hidden_size": self.model.hidden_size,
                 "max_periods": self.model.max_periods,
+                "clip_denoised": self.model.clip_denoised,
+                "mean_loss_weight": self.model.mean_loss_weight,
+                "return_mean": self.model.return_mean.cpu(),
+                "return_scale": self.model.return_scale.cpu(),
             },
             path,
         )

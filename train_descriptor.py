@@ -21,6 +21,7 @@ from diffusion_factor_model.descriptor_score_model import (
     DescriptorFactorDiffusion,
     DescriptorReturnDataset,
     DescriptorTrainer,
+    compute_return_norm_stats,
     generate_descriptor_dataset,
     load_descriptor_dataset,
     save_descriptor_dataset,
@@ -33,6 +34,7 @@ def generate_samples(
     device: torch.device,
     num_gen: int,
     gen_batch_size: int = cfg.SAMPLES_PER_BATCH,
+    deterministic: bool = False,
 ) -> np.ndarray:
     """Generate returns in batches to avoid GPU OOM."""
     model.eval()
@@ -49,7 +51,9 @@ def generate_samples(
                 period_idx = torch.zeros(end - start, device=device, dtype=torch.long)
             else:
                 period_idx = torch.arange(start, end, device=device, dtype=torch.long)
-            chunks.append(model.sample(U, period_idx).cpu().numpy())
+            chunks.append(
+                model.sample(U, period_idx, deterministic=deterministic).cpu().numpy()
+            )
     return np.concatenate(chunks, axis=0)
 
 
@@ -115,9 +119,12 @@ def evaluate_samples(
     device: torch.device,
     num_gen: int = cfg.SAMPLE_BATCHES * cfg.SAMPLES_PER_BATCH,
     gen_batch_size: int = cfg.SAMPLES_PER_BATCH,
+    deterministic: bool = False,
 ) -> tuple:
     """Quick sanity metrics: mean/cov distance and learned A vs ground-truth T."""
-    generated = generate_samples(model, data, device, num_gen, gen_batch_size)
+    generated = generate_samples(
+        model, data, device, num_gen, gen_batch_size, deterministic=deterministic
+    )
     n = generated.shape[0]
     real = data["returns"][:n]
     metrics = {
@@ -156,6 +163,8 @@ def load_model_from_checkpoint(
     device: torch.device,
     timesteps: int,
     hidden_size: int,
+    clip_denoised: float = 3.0,
+    mean_loss_weight: float = 0.0,
 ) -> DescriptorFactorDiffusion:
     ckpt = torch.load(checkpoint_path, map_location=device)
     model = DescriptorFactorDiffusion(
@@ -165,8 +174,12 @@ def load_model_from_checkpoint(
         timesteps=ckpt.get("num_timesteps", timesteps),
         hidden_size=ckpt.get("hidden_size", hidden_size),
         max_periods=ckpt.get("max_periods", 4096),
+        clip_denoised=ckpt.get("clip_denoised", clip_denoised),
+        mean_loss_weight=ckpt.get("mean_loss_weight", mean_loss_weight),
     )
     model.load_state_dict(ckpt["model"])
+    if "return_mean" in ckpt and "return_scale" in ckpt:
+        model.set_return_normalization(ckpt["return_mean"], float(ckpt["return_scale"].item()))
     model.to(device)
     return model
 
@@ -243,6 +256,29 @@ def main():
         action="store_true",
         help="Regenerate dataset even if data_dir already exists",
     )
+    parser.add_argument(
+        "--normalize_returns",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Standardize returns (per-asset mean, global std) before diffusion",
+    )
+    parser.add_argument(
+        "--mean_loss_weight",
+        type=float,
+        default=0.05,
+        help="Weight for auxiliary zero-mean x0 loss (0 disables)",
+    )
+    parser.add_argument(
+        "--clip_denoised",
+        type=float,
+        default=3.0,
+        help="Clamp predicted x0 to [-clip, clip] in normalized space (0 disables)",
+    )
+    parser.add_argument(
+        "--deterministic_sample",
+        action="store_true",
+        help="Use posterior mean only when sampling (no reverse-step noise)",
+    )
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
@@ -302,7 +338,12 @@ def main():
         if not checkpoint_path.exists():
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
         model = load_model_from_checkpoint(
-            checkpoint_path, device, args.timesteps, args.hidden_size
+            checkpoint_path,
+            device,
+            args.timesteps,
+            args.hidden_size,
+            clip_denoised=args.clip_denoised,
+            mean_loss_weight=args.mean_loss_weight,
         )
         print(f"Loaded checkpoint from {checkpoint_path}")
         print(f"Generating {args.num_gen} samples (batch size {args.gen_batch_size}) ...")
@@ -312,6 +353,7 @@ def main():
             device,
             num_gen=args.num_gen,
             gen_batch_size=args.gen_batch_size,
+            deterministic=args.deterministic_sample,
         )
         print("Sample metrics:")
         print_metrics(metrics)
@@ -335,7 +377,18 @@ def main():
         beta_schedule="cosine",
         hidden_size=args.hidden_size,
         max_periods=max_periods,
+        clip_denoised=args.clip_denoised,
+        mean_loss_weight=args.mean_loss_weight,
     )
+
+    if args.normalize_returns:
+        ret_mean, ret_scale = compute_return_norm_stats(data["returns"])
+        model.set_return_normalization(ret_mean, ret_scale)
+        print(
+            f"Return normalization: mean_l2={np.linalg.norm(ret_mean):.6f}, scale={ret_scale:.6f}"
+        )
+    else:
+        model.set_return_normalization(np.zeros(meta["num_assets"], dtype=np.float32), 1.0)
 
     trainer = DescriptorTrainer(
         model,
@@ -352,7 +405,9 @@ def main():
     print(
         f"Training on {device}: "
         f"d={meta['num_assets']} m={meta['num_descriptors']} k={meta['num_factors']} "
-        f"n={meta['num_samples']} mode={meta.get('descriptor_mode', '?')} timesteps={args.timesteps}"
+        f"n={meta['num_samples']} mode={meta.get('descriptor_mode', '?')} timesteps={args.timesteps} "
+        f"normalize={args.normalize_returns} mean_loss={args.mean_loss_weight} "
+        f"clip={args.clip_denoised}"
     )
     trainer.train()
 
@@ -363,6 +418,7 @@ def main():
         device,
         num_gen=args.num_gen,
         gen_batch_size=args.gen_batch_size,
+        deterministic=args.deterministic_sample,
     )
     print("Post-training metrics:")
     print_metrics(metrics)

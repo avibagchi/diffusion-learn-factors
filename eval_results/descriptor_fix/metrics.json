@@ -3,22 +3,22 @@
   "num_generated": 2048,
   "num_assets": 32,
   "real_mean_l2": 0.036509886384010315,
-  "gen_mean_l2": 0.37472015619277954,
-  "mean_diff_l2": 0.38238200545310974,
+  "gen_mean_l2": 0.174111470580101,
+  "mean_diff_l2": 0.19774869084358215,
   "real_cov_fro": 2.004783034659087,
-  "gen_cov_fro": 1.5934551664859489,
-  "cov_diff_fro": 0.4663298953954062,
-  "cov_ratio_gen_over_real": 0.7948267413171299,
-  "cov_diff_relative": 0.23260866005617686,
-  "std_ratio_gen_over_real": 0.8982508778572083,
+  "gen_cov_fro": 0.9095178433489052,
+  "cov_diff_fro": 1.2098666833505436,
+  "cov_ratio_gen_over_real": 0.45367395255495496,
+  "cov_diff_relative": 0.603490084679553,
+  "std_ratio_gen_over_real": 0.6762813329696655,
   "data_type": "descriptor",
   "num_factors": 4,
   "subspace_error_training": 0.0647581816833105,
-  "subspace_error_generated": 0.2498813173794859,
-  "subspace_error_ratio": 3.8586833491015913,
+  "subspace_error_generated": 0.6174163169957303,
+  "subspace_error_ratio": 9.534182414433836,
   "eigenvalue_error_training": 0.052792166220225756,
-  "eigenvalue_error_generated": 0.19880864872830623,
-  "eigenvalue_error_ratio": 3.765874048413997,
+  "eigenvalue_error_generated": 0.550858212426544,
+  "eigenvalue_error_ratio": 10.434468821161936,
   "ground_truth_eigenvalues": [
     1.4156376123428345,
     1.1947686672210693,
@@ -32,9 +32,9 @@
     0.5633922318043119
   ],
   "generated_top_eigenvalues": [
-    1.13958639286854,
-    0.7898187292175732,
-    0.6041723636064339,
-    0.5016017851054617
+    0.6315466520826434,
+    0.48403204143401596,
+    0.36536779472729314,
+    0.24615217037472795
   ]
 }

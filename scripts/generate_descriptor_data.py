@@ -2,7 +2,12 @@
 """Generate a synthetic returns + descriptors dataset for descriptor score training."""
 
 import argparse
+import sys
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from config import config as cfg
 from diffusion_factor_model.descriptor_score_model import generate_descriptor_dataset, save_descriptor_dataset

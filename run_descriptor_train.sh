@@ -22,4 +22,7 @@ python train_descriptor.py \
   --data_dir data/descriptor_demo \
   --output_dir model_results/descriptor_demo \
   --descriptor_mode fixed \
+  --normalize_returns \
+  --mean_loss_weight 0.05 \
+  --clip_denoised 3.0 \
   --gpu "$GPU"
