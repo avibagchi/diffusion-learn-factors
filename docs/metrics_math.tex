@@ -1,0 +1,316 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+\hypersetup{colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue}
+
+% --- Notation shortcuts ---
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
+\newcommand{\fro}[1]{\norm{#1}_{F}}
+\newcommand{\twonorm}[1]{\norm{#1}_{2}}
+\newcommand{\T}{^{\!\top}}
+\newcommand{\range}{\operatorname{span}}
+\newcommand{\rank}{\operatorname{rank}}
+\newcommand{\diag}{\operatorname{diag}}
+\newcommand{\Cov}{\operatorname{Cov}}
+\newcommand{\orth}{\operatorname{orth}}
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+\title{\textbf{Evaluation Metrics for the Descriptor Diffusion Factor Model}\\[4pt]
+\large Mathematical Definitions}
+\author{Diffusion Learn Factors --- branch \texttt{subspace-recovery-metric}}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note states, precisely and in self-contained notation, every quantitative
+metric computed in the descriptor diffusion factor model. We group them into
+(i)~\emph{subspace recovery} metrics that compare the learned descriptor-to-factor
+map $A$ against the ground-truth map $T$ in a rotation- and scaling-invariant way,
+(ii)~\emph{distribution-matching} sanity metrics comparing real and generated
+returns through their first two moments, and (iii)~\emph{ground-truth subspace and
+eigenvalue} errors that benchmark both the training sample and the generated sample
+against the analytically known return covariance. Each definition is paired with a
+one-line interpretation.
+\end{abstract}
+
+%==================================================================
+\section{Setup and notation}
+%==================================================================
+
+\paragraph{Dimensions.}
+$d$ = number of assets, $m$ = number of descriptors, $k$ = number of latent
+factors, $n$ = number of samples (periods). Throughout, $\twonorm{\cdot}$ is the
+Euclidean norm, $\fro{\cdot}$ the Frobenius norm, and for $M\in\R^{a\times b}$
+the singular values are written $\sigma_1(M)\ge\sigma_2(M)\ge\cdots\ge 0$.
+
+\paragraph{Generative model (residual-free).}
+For period $i$ we are given a descriptor matrix $U_i\in\R^{d\times m}$ and a
+\emph{time-invariant} ground-truth factor map $T\in\R^{m\times k}$. Latent factors
+are standard Gaussian, $F_i\sim\mathcal N(0,I_k)$, and returns are generated noiselessly as
+\begin{equation}
+  r_i \;=\; U_i\,T\,F_i \;\in\; \R^{d}.
+  \label{eq:genmodel}
+\end{equation}
+In the \emph{fixed} regime $U_i\equiv U$ is constant across periods, so the
+asset loadings $\beta = U T\in\R^{d\times k}$ are time invariant and
+$r_i=\beta F_i$. The identifiable object is the \emph{loading subspace}
+$\range(\beta)$; both $T$ and $A$ (below) are only defined up to a $k\times k$
+change of basis.
+
+\paragraph{Score decomposition (the model).}
+Let $Q_i\in\R^{d\times m}$ be the orthonormal factor of the thin QR decomposition
+of $U_i$ (so $Q_i\T Q_i = I_m$ and $\range(Q_i)=\range(U_i)$), and write the
+projected state $z = Q_i\T r$. With a learned map $A\in\R^{m\times k}$ and a
+network $g_\zeta(\cdot)\in\R^k$, the score estimator is
+\begin{equation}
+  s_\theta(r,t,i) \;=\; -\frac{1}{h_t}\,r \;+\; \frac{\alpha_t}{h_t}\,U_i\,A\;
+  g_\zeta\!\bigl(Q_i\T r,\,t,\,i\bigr),
+  \label{eq:score}
+\end{equation}
+where $\alpha_t=\sqrt{\bar\alpha_t}$ and $h_t = 1-\bar\alpha_t$ are the standard
+DDPM forward-process coefficients ($x_t=\alpha_t x_0+\sqrt{h_t}\,\varepsilon$,
+$\varepsilon\sim\mathcal N(0,I_d)$, $\bar\alpha_t=\prod_{s\le t}\alpha_s$).
+The network is trained on the noise-prediction reparameterisation
+$\varepsilon_\theta = -\sqrt{h_t}\,s_\theta$ with the DDPM objective
+$\mathcal L = \E_{t,x_0,\varepsilon}\fro{\varepsilon_\theta(x_t,t)-\varepsilon}^2$.
+The matrix $A$ is the model's estimate of $T$; comparing $A$ to $T$ is the central
+identifiability question, addressed in Section~\ref{sec:subspace}.
+
+%==================================================================
+\section{Subspace recovery metrics: \texorpdfstring{$A$}{A} versus \texorpdfstring{$T$}{T}}
+\label{sec:subspace}
+%==================================================================
+
+Because the factors are only identifiable up to a $k\times k$ invertible map,
+$A$ and $T$ should \emph{not} be compared entrywise. We instead compare their
+column spaces, $\range(A)$ and $\range(T)$, with rotation- and scaling-invariant
+quantities.
+
+\subsection{Orthonormal bases}
+For a matrix $M\in\R^{m\times k}$ with thin SVD $M = U_M\,\Sigma_M\,V_M\T$, define
+its numerical rank and an orthonormal basis of its column space by
+\begin{equation}
+  r(M) = \#\bigl\{\, j : \sigma_j(M) > \tau\,\max(\sigma_1(M),1) \,\bigr\},
+  \qquad
+  Q_M = \orth(M) = \bigl[\,u_1\ \cdots\ u_{r(M)}\,\bigr],
+\end{equation}
+i.e.\ the first $r(M)$ left singular vectors, with tolerance $\tau = 10^{-9}$.
+We write
+\begin{equation}
+  Q_A = \orth(A)\in\R^{m\times r_A},\quad
+  Q_T = \orth(T)\in\R^{m\times r_T},\quad
+  k_\star = \min(r_A, r_T),
+\end{equation}
+so that $Q_A\T Q_A = I_{r_A}$ and $Q_T\T Q_T = I_{r_T}$.
+
+\subsection{Principal angles}
+The principal angles $0\le\theta_1\le\cdots\le\theta_{k_\star}\le\tfrac{\pi}{2}$
+between $\range(A)$ and $\range(T)$ have cosines equal to the singular values of
+$Q_A\T Q_T$:
+\begin{equation}
+  \cos\theta_j \;=\; \operatorname{clip}_{[-1,1]}\!\bigl(\sigma_j(Q_A\T Q_T)\bigr),
+  \qquad
+  \theta_j = \arccos(\cos\theta_j), \quad j = 1,\dots,k_\star.
+  \label{eq:angles}
+\end{equation}
+We report (in degrees) the full vector $(\theta_1,\dots,\theta_{k_\star})$ together
+with its mean and maximum:
+\begin{equation}
+  \overline{\theta} = \frac{1}{k_\star}\sum_{j=1}^{k_\star}\theta_j,
+  \qquad
+  \theta_{\max} = \max_{j}\theta_j .
+\end{equation}
+\emph{Interpretation:} $\theta_j=0$ for all $j$ means the subspaces coincide;
+$\theta_{\max}$ near $90^\circ$ signals a direction of $\range(T)$ not captured by
+$\range(A)$.
+
+\subsection{Grassmann (geodesic) distance}
+The geodesic distance on the Grassmann manifold is the $\ell_2$ norm of the angle
+vector:
+\begin{equation}
+  d_{\mathrm{G}}(A,T) \;=\; \twonorm{\bm\theta} \;=\;
+  \Bigl(\textstyle\sum_{j=1}^{k_\star}\theta_j^2\Bigr)^{1/2}.
+  \label{eq:grassmann}
+\end{equation}
+\emph{Interpretation:} a single scalar summary of subspace disagreement; $0$ iff
+the subspaces coincide.
+
+\subsection{Projector (Frobenius) distance}
+Let $P_A = Q_A Q_A\T$ and $P_T = Q_T Q_T\T$ be the orthogonal projectors onto the
+two subspaces. The projector distance and its normalisation are
+\begin{equation}
+  \Delta_P \;=\; \fro{P_A - P_T},
+  \qquad
+  \widehat{\Delta}_P \;=\; \frac{\Delta_P}{\sqrt{2\,k_\star}} .
+  \label{eq:projector}
+\end{equation}
+For equal-dimensional subspaces ($r_A=r_T=k_\star$) this is exactly tied to the
+principal angles via
+\begin{equation}
+  \fro{P_A - P_T} \;=\; \sqrt{2}\,\twonorm{\sin\bm\theta}
+  \;=\; \sqrt{2}\Bigl(\textstyle\sum_{j}\sin^2\theta_j\Bigr)^{1/2},
+\end{equation}
+and the maximum possible value over two $k_\star$-dimensional subspaces is
+$\sqrt{2k_\star}$, so $\widehat\Delta_P\in[0,1]$.
+\emph{Interpretation:} a basis-free distance between the subspaces; $0$ = perfect
+overlap, $1$ = orthogonal subspaces.
+
+\subsection{Orthogonal Procrustes residual}
+We align the bases by the optimal orthogonal map
+$R^\star = \argmin_{R\T R = I}\fro{Q_A R - Q_T}$. With the SVD
+$Q_A\T Q_T = W\,\Sigma\,Z\T$ the solution is $R^\star = W Z\T$, and we report the
+relative residual
+\begin{equation}
+  \rho \;=\; \frac{\fro{Q_A R^\star - Q_T}}{\max\bigl(\fro{Q_T},\,10^{-12}\bigr)},
+  \qquad \fro{Q_T}=\sqrt{r_T}.
+  \label{eq:procrustes}
+\end{equation}
+\emph{Interpretation:} the fraction of $Q_T$'s energy that the best rotation of
+$Q_A$ fails to reproduce; $\rho=0$ means $\range(A)$ contains $\range(T)$ exactly.
+
+\subsection{Singular-value spectra (reference only)}
+For completeness we also record the raw spectra
+$\sigma(A)=(\sigma_1(A),\dots)$ and $\sigma(T)=(\sigma_1(T),\dots)$.
+These are \emph{not} rotation invariant and are blind to the column space; they are
+reported only to diagnose scaling/conditioning, never as a recovery criterion.
+
+%==================================================================
+\section{Distribution-matching (moment) metrics}
+\label{sec:moments}
+%==================================================================
+
+Let $\{r^{(s)}\}_{s=1}^{n}\subset\R^{d}$ be real (training) returns and
+$\{g^{(s)}\}_{s=1}^{n}\subset\R^{d}$ generated returns. Define the empirical means
+and (unbiased, $n-1$ normalised) covariances
+\begin{equation}
+  \mu_{\mathrm{r}} = \frac1n\sum_{s} r^{(s)},\quad
+  \mu_{\mathrm{g}} = \frac1n\sum_{s} g^{(s)},\quad
+  C_{\mathrm{r}} = \frac{1}{n-1}\sum_{s}(r^{(s)}-\mu_{\mathrm r})(r^{(s)}-\mu_{\mathrm r})\T,
+\end{equation}
+and $C_{\mathrm g}$ analogously. The reported metrics are:
+\begin{align}
+  \text{mean norms:}\quad
+    &\twonorm{\mu_{\mathrm r}},\quad \twonorm{\mu_{\mathrm g}},\quad
+     \twonorm{\mu_{\mathrm r}-\mu_{\mathrm g}}, \\[2pt]
+  \text{covariance norms:}\quad
+    &\fro{C_{\mathrm r}},\quad \fro{C_{\mathrm g}},\quad
+     \fro{C_{\mathrm r}-C_{\mathrm g}}, \\[2pt]
+  \text{covariance ratio:}\quad
+    &\kappa_{\mathrm{cov}} = \frac{\fro{C_{\mathrm g}}}{\fro{C_{\mathrm r}}}, \\[2pt]
+  \text{relative covariance error:}\quad
+    &\epsilon_{\mathrm{cov}} = \frac{\fro{C_{\mathrm r}-C_{\mathrm g}}}{\fro{C_{\mathrm r}}}, \\[2pt]
+  \text{std ratio:}\quad
+    &\kappa_{\mathrm{std}} = \frac{\frac1d\sum_{j=1}^{d}\widehat\sigma_j(g)}
+                                  {\frac1d\sum_{j=1}^{d}\widehat\sigma_j(r)},
+\end{align}
+where $\widehat\sigma_j(\cdot)$ is the per-asset sample standard deviation
+(population normalisation, $n$). \emph{Interpretation:} $\twonorm{\mu_{\mathrm r}-\mu_{\mathrm g}}$
+and $\epsilon_{\mathrm{cov}}$ should be small; $\kappa_{\mathrm{cov}},\kappa_{\mathrm{std}}\to 1$
+indicate the generator matches the real second moments rather than under- or
+over-dispersing.
+
+%==================================================================
+\section{Ground-truth subspace and eigenvalue errors}
+\label{sec:gt}
+%==================================================================
+
+Here both the real and generated samples are benchmarked against the analytic
+ground-truth return covariance $\Sigma\in\R^{d\times d}$, which is known in closed
+form:
+\begin{equation}
+  \Sigma \;=\;
+  \begin{cases}
+    \beta\beta\T, & \text{descriptor model, fixed } U\ (\beta=UT),\\[4pt]
+    \dfrac1n\sum_{i=1}^{n}\beta_i\beta_i\T,\ \ \beta_i = U_i T,
+      & \text{descriptor model, time-varying } U_i,\\[8pt]
+    A_{\mathrm{load}}\T A_{\mathrm{load}} + \sigma^2 I,
+      & \text{U-Net simulation (loading matrix } A_{\mathrm{load}},\ \text{noise } \sigma^2).
+  \end{cases}
+\end{equation}
+
+\paragraph{Rank-$k$ truncation.}
+For any symmetric PSD covariance $C$ with eigendecomposition (equivalently SVD)
+$C = \sum_{j} \lambda_j\,u_j u_j\T$, $\lambda_1\ge\lambda_2\ge\cdots\ge0$, define
+the top-$k$ reconstruction and the top-$k$ eigenvalue vector
+\begin{equation}
+  C_{(k)} = \sum_{j=1}^{k}\lambda_j\,u_j u_j\T
+          = U_k\,\diag(\lambda_1,\dots,\lambda_k)\,U_k\T,
+  \qquad
+  \bm\lambda(C) = (\lambda_1,\dots,\lambda_k).
+\end{equation}
+
+\paragraph{Subspace error.}
+With $\Sigma_{(k)}$ the ground-truth rank-$k$ reconstruction and
+$C_{\mathrm r},C_{\mathrm g}$ the real / generated sample covariances of
+Section~\ref{sec:moments}, define
+\begin{equation}
+  E^{\mathrm{sub}}_{\mathrm r} = \frac{\fro{(C_{\mathrm r})_{(k)} - \Sigma_{(k)}}}{\fro{\Sigma_{(k)}}},
+  \qquad
+  E^{\mathrm{sub}}_{\mathrm g} = \frac{\fro{(C_{\mathrm g})_{(k)} - \Sigma_{(k)}}}{\fro{\Sigma_{(k)}}},
+  \qquad
+  \frac{E^{\mathrm{sub}}_{\mathrm g}}{E^{\mathrm{sub}}_{\mathrm r}}.
+  \label{eq:suberr}
+\end{equation}
+
+\paragraph{Eigenvalue error.}
+With ground-truth eigenvalues $\bm\lambda(\Sigma)=(\lambda^{\mathrm{gt}}_1,\dots,\lambda^{\mathrm{gt}}_k)$,
+define the mean relative top-$k$ eigenvalue error
+\begin{equation}
+  E^{\mathrm{eig}}_{\bullet}
+    = \frac{1}{k}\sum_{j=1}^{k}
+      \left|\frac{\lambda_j(C_\bullet)}{\lambda^{\mathrm{gt}}_j} - 1\right|,
+    \qquad \bullet\in\{\mathrm r,\mathrm g\},
+    \qquad
+    \frac{E^{\mathrm{eig}}_{\mathrm g}}{E^{\mathrm{eig}}_{\mathrm r}}.
+  \label{eq:eigerr}
+\end{equation}
+We additionally report the three raw spectra
+$\bm\lambda(\Sigma),\ \bm\lambda(C_{\mathrm r}),\ \bm\lambda(C_{\mathrm g})$.
+\emph{Interpretation:} $E^{\mathrm{sub}}$ measures how well the leading
+return-covariance subspace is reproduced and $E^{\mathrm{eig}}$ how well its
+scale (variance per factor) is reproduced. A ratio $<1$ means the
+\emph{generated} sample is closer to the ground truth than the finite training
+sample itself --- the goal for a well-trained generator.
+
+%==================================================================
+\section{Summary of reported quantities}
+%==================================================================
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+Symbol & Definition & Good value \\
+\midrule
+\multicolumn{3}{@{}l}{\emph{Subspace recovery ($A$ vs $T$), Section~\ref{sec:subspace}}}\\
+$\theta_j,\ \overline\theta,\ \theta_{\max}$ & principal angles \eqref{eq:angles} & $\to 0$ \\
+$d_{\mathrm G}$ & Grassmann distance \eqref{eq:grassmann} & $\to 0$ \\
+$\Delta_P,\ \widehat\Delta_P$ & projector distance \eqref{eq:projector} & $\to 0$ \\
+$\rho$ & Procrustes residual \eqref{eq:procrustes} & $\to 0$ \\
+$\sigma(A),\sigma(T)$ & singular spectra & reference only \\
+\midrule
+\multicolumn{3}{@{}l}{\emph{Moment matching, Section~\ref{sec:moments}}}\\
+$\twonorm{\mu_{\mathrm r}-\mu_{\mathrm g}}$ & mean discrepancy & $\to 0$ \\
+$\epsilon_{\mathrm{cov}}$ & relative covariance error & $\to 0$ \\
+$\kappa_{\mathrm{cov}},\ \kappa_{\mathrm{std}}$ & covariance / std ratio & $\to 1$ \\
+\midrule
+\multicolumn{3}{@{}l}{\emph{Ground-truth errors, Section~\ref{sec:gt}}}\\
+$E^{\mathrm{sub}}_{\mathrm r},E^{\mathrm{sub}}_{\mathrm g}$ & subspace error \eqref{eq:suberr} & $\to 0$ \\
+$E^{\mathrm{eig}}_{\mathrm r},E^{\mathrm{eig}}_{\mathrm g}$ & eigenvalue error \eqref{eq:eigerr} & $\to 0$ \\
+$E^{\mathrm{sub}}_{\mathrm g}/E^{\mathrm{sub}}_{\mathrm r},\ E^{\mathrm{eig}}_{\mathrm g}/E^{\mathrm{eig}}_{\mathrm r}$ & generated-vs-training ratios & $<1$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}
