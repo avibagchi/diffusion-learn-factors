@@ -44,6 +44,7 @@ def init_descriptor_A(num_descriptors: int, num_factors: int) -> torch.Tensor:
     """Orthonormal columns, unit scale — matches typical QR ground-truth T."""
     A = torch.empty(num_descriptors, num_factors)
     nn.init.orthogonal_(A)
+    # nn.init.xavier_normal_(A)
     return A
 
 
