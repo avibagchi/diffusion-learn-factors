@@ -10,3 +10,6 @@ pandas>=1.3.0
 scikit-learn>=1.0.0
 seaborn>=0.11.0
 mosek>=10.0.0  # need to verify the license
+# Real-data §3.2 inputs (Yahoo returns + OpenAssetPricing characteristics)
+openassetpricing>=1.0
+yfinance>=0.2

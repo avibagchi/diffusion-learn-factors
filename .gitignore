@@ -175,3 +175,6 @@ cython_debug/
 
 # Training output (regenerable checkpoints + tensorboard)
 model_results/
+
+# Cached raw data downloads (regenerable: OAP signals, Yahoo prices)
+data/cache/
