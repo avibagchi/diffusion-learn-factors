@@ -1,0 +1,12 @@
+{
+  "num_samples": 2048,
+  "num_factors": 16,
+  "height": 32,
+  "width": 64,
+  "num_assets": 2048,
+  "noise_scale": 0.1,
+  "factor_scale": 1.0,
+  "seed": 42,
+  "model": "GaussianLatentSampler2D_Finance",
+  "returns_shape": "(num_samples, height, width)"
+}

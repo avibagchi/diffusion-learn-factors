@@ -65,8 +65,12 @@ class FactorScoreNet(nn.Module):
             nn.GELU(),
             nn.Linear(time_dim, time_dim),
         )
-        self.period_emb = nn.Embedding(P, period_emb_dim)
-        cond_dim = time_dim + period_emb_dim
+        if period_emb_dim > 0:
+            self.period_emb = nn.Embedding(P, period_emb_dim)
+            cond_dim = time_dim + period_emb_dim
+        else:
+            self.period_emb = None
+            cond_dim = time_dim
 
         self.in_proj = nn.Linear(m, hidden_dim)
         self.blocks = nn.ModuleList(nn.Linear(hidden_dim, hidden_dim) for _ in range(depth))
@@ -79,7 +83,9 @@ class FactorScoreNet(nn.Module):
 
     def network(self, x_m, t, i):
         """The deep network: (b, m) projected returns → (b, k) factor estimate."""
-        cond = torch.cat([self.time_mlp(t), self.period_emb(i)], dim=-1)
+        cond = self.time_mlp(t)
+        if self.period_emb is not None:
+            cond = torch.cat([cond, self.period_emb(i)], dim=-1)
         h = self.in_proj(x_m)
         for block, film in zip(self.blocks, self.films):
             scale, shift = film(cond).chunk(2, dim=-1)

@@ -1,0 +1,12 @@
+{
+  "num_samples": 1024,
+  "num_assets": 32,
+  "num_descriptors": 8,
+  "num_factors": 4,
+  "descriptor_mode": "fixed",
+  "descriptor_noise": 0.05,
+  "descriptor_perturbation": 0.02,
+  "factor_scale": 1.0,
+  "seed": 3407,
+  "model": "residual_free_R_equals_U_T_F"
+}

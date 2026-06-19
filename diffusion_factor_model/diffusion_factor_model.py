@@ -6,8 +6,23 @@ from functools import partial
 from collections import namedtuple
 from multiprocessing import cpu_count
 from scipy.stats import ortho_group
-from torch.utils.tensorboard import SummaryWriter
 import os
+
+try:
+    from torch.utils.tensorboard import SummaryWriter
+except ImportError:
+    class SummaryWriter:  # noqa: F811 — optional dependency
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def add_scalar(self, *args, **kwargs):
+            pass
+
+        def flush(self):
+            pass
+
+        def close(self):
+            pass
 
 import torch
 import numpy as np
