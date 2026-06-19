@@ -133,3 +133,28 @@ class FactorGaussianDiffusion(GaussianDiffusion):
         assert d == self.dim, f'return dimension must be {self.dim}'
         t = torch.randint(0, self.num_timesteps, (b,), device=r.device).long()
         return self.p_losses(r, t, i)
+
+    # ------------------------------ sampling -------------------------------- #
+    # The parent's p_sample_loop/sample are image-shaped and never thread the
+    # period index i to the model, so generation must be re-implemented on the
+    # (b, d) vector path with i carried through every reverse step.
+
+    @torch.inference_mode()
+    def p_sample(self, x, t, i):
+        """One ancestral reverse step on (b, d) returns at integer step t."""
+        b = x.shape[0]
+        batched_t = torch.full((b,), t, device=x.device, dtype=torch.long)
+        _, x_start = self.model_predictions(x, batched_t, i)
+        model_mean, _, model_log_var = self.q_posterior(x_start=x_start, x_t=x, t=batched_t)
+        noise = torch.randn_like(x) if t > 0 else torch.zeros_like(x)
+        return model_mean + (0.5 * model_log_var).exp() * noise, x_start
+
+    @torch.inference_mode()
+    def sample(self, i):
+        """Generate one return vector per period index in i via the full
+        ancestral reverse process. i: (N,) long period indices -> (N, d)."""
+        i = i.to(self.device).long()
+        x = torch.randn(len(i), self.dim, device=self.device)
+        for t in reversed(range(self.num_timesteps)):
+            x, _ = self.p_sample(x, t, i)
+        return x

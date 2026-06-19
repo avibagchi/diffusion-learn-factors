@@ -98,7 +98,7 @@ def main():
     print(f"  ||Sigma_real-Sigma_gen||_F = {(S_real - S_gen).norm().item():.6f}")
 
     # ---- 2. pooled spectra ----
-    n_top = 10
+    n_top = min(10, d)
     w_real, _ = top_eigs(S_real, d)
     w_gen, _ = top_eigs(S_gen, d)
     print("\n" + "=" * 72)
