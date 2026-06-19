@@ -584,8 +584,9 @@ class DescriptorTrainer:
             history.append(avg_loss)
             print(f"Epoch {epoch + 1}/{self.epochs}  loss={avg_loss:.6f}")
 
-            if (epoch + 1) % self.save_every == 0:
-                self._save_checkpoint(epoch + 1)
+            epoch_num = epoch + 1
+            if epoch_num % self.save_every == 0 or epoch_num == self.epochs:
+                self._save_checkpoint(epoch_num)
 
         self._save_checkpoint("final")
         return history
