@@ -178,3 +178,4 @@ model_results/
 
 # Cached raw data downloads (regenerable: OAP signals, Yahoo prices)
 data/cache/
+logs/
