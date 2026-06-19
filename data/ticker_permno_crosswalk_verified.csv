@@ -1,0 +1,30 @@
+ticker,permno,name
+AAPL,14593,Apple
+MSFT,10107,Microsoft
+WMT,55976,Walmart
+INTC,59328,Intel
+CVX,14541,Chevron
+CAT,18542,Caterpillar
+CSCO,76076,Cisco
+TXN,15579,Texas Instruments
+COST,87055,Costco
+KO,11308,Coca-Cola
+PEP,13856,PepsiCo
+PG,18163,Procter & Gamble
+JNJ,22111,Johnson & Johnson
+PFE,21936,Pfizer
+MRK,22752,Merck
+XOM,11850,Exxon Mobil
+MCD,43449,McDonald's
+HD,66181,Home Depot
+IBM,12490,IBM
+ORCL,10104,Oracle
+QCOM,77178,Qualcomm
+MMM,22592,3M
+HON,10145,Honeywell
+BA,19561,Boeing
+GE,12060,General Electric
+ABT,20482,Abbott
+LLY,50876,Eli Lilly
+BMY,19393,Bristol-Myers
+AMD,61241,AMD
